@@ -1,3 +1,21 @@
+// Add React Native specific type declarations
+declare global {
+  interface ErrorUtils {
+    getGlobalHandler(): (error: Error, isFatal?: boolean) => void;
+    setGlobalHandler(callback: (error: Error, isFatal?: boolean) => void): void;
+  }
+}
+
+// For React Native specific globals
+declare const global: {
+  ErrorUtils?: {
+    getGlobalHandler(): (error: Error, isFatal?: boolean) => void;
+    setGlobalHandler(callback: (error: Error, isFatal?: boolean) => void): void;
+  };
+  toadlyAutoReportCrashes?: boolean;
+  [key: string]: any;
+};
+
 class LoggingService {
   private static instance: LoggingService;
   private logs: string[] = [];
@@ -9,9 +27,12 @@ class LoggingService {
     error: console.error,
   };
   private isOverridden: boolean = false;
+  private isErrorHandlingSetup: boolean = false;
+  private autoSubmitIssues: boolean = false;
 
   private constructor() {
     this.setupConsoleOverrides();
+    this.setupErrorHandling();
   }
 
   private setupConsoleOverrides() {
@@ -41,6 +62,87 @@ class LoggingService {
       this.captureLog('ERROR', ...args);
       this.originalConsole.error(...args);
     };
+  }
+
+  private setupErrorHandling() {
+    // Only setup once to prevent duplicate handlers
+    if (this.isErrorHandlingSetup || typeof global === 'undefined') {
+      return;
+    }
+
+    this.isErrorHandlingSetup = true;
+
+    // Handle uncaught JS exceptions in React Native
+    if (global.ErrorUtils) {
+      // Get the default global error handler
+      const defaultErrorHandler = global.ErrorUtils.getGlobalHandler();
+      
+      // Set our custom error handler
+      global.ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
+        this.captureJSCrash(error, isFatal);
+        
+        // If auto-submit is enabled and the error is fatal, create a GitHub issue
+        if (this.autoSubmitIssues && isFatal) {
+          this.submitErrorAsGitHubIssue(error, isFatal);
+        }
+        
+        // Call the default handler afterwards
+        defaultErrorHandler(error, isFatal);
+      });
+    }
+  }
+
+  private captureJSCrash(error: Error, isFatal: boolean = false) {
+    try {
+      const errorType = isFatal ? 'FATAL CRASH' : 'CRASH';
+      const timestamp = new Date().toISOString();
+      
+      // Format the error with stack trace if available
+      const errorMessage = error.message || String(error);
+      const stackTrace = error.stack || '';
+      
+      // Create detailed crash log
+      const crashLog = [
+        `[${timestamp}] [${errorType}] ${errorMessage}`,
+        stackTrace ? `Stack trace:\n${stackTrace}` : '',
+        `Component info: ${this.getComponentInfo()}`
+      ].filter(Boolean).join('\n');
+      
+      // Add to logs
+      this.logs.push(crashLog);
+      
+      if (this.logs.length > this.maxLogs) {
+        this.logs.shift();
+      }
+    } catch (captureError) {
+      // Use original console to avoid recursion
+      this.originalConsole.error('Error capturing JS crash:', captureError);
+    }
+  }
+
+  private submitErrorAsGitHubIssue(error: Error, isFatal: boolean = false) {
+    try {
+      // Create a descriptive title for the issue
+      const errorType = isFatal ? 'Fatal Error' : 'Non-Fatal Error';
+      const title = `[${errorType}] ${error.message.substring(0, 100)}`;
+      
+      // Import dynamically to avoid circular dependencies
+      const { _createIssueWithTitle } = require('./index');
+      
+      // Use a slight delay to ensure logs are captured
+      setTimeout(() => {
+        _createIssueWithTitle(title);
+      }, 100);
+    } catch (submitError) {
+      // Use original console to avoid recursion
+      this.originalConsole.error('Error submitting GitHub issue:', submitError);
+    }
+  }
+
+  private getComponentInfo(): string {
+    // This is a placeholder - in a real app you might want to capture
+    // current screen, component tree, or other relevant context
+    return 'No component info available';
   }
 
   public static getInstance(): LoggingService {
@@ -89,6 +191,24 @@ class LoggingService {
 
   public clearLogs(): void {
     this.logs = [];
+  }
+
+  public logError(error: Error, fatal: boolean = false): void {
+    this.captureJSCrash(error, fatal);
+    
+    if (this.autoSubmitIssues) {
+      this.submitErrorAsGitHubIssue(error, fatal);
+    }
+  }
+
+  public enableAutomaticCrashReporting(enable: boolean = true): void {
+    if (typeof global !== 'undefined') {
+      global.toadlyAutoReportCrashes = enable;
+    }
+  }
+
+  public enableAutomaticIssueSubmission(enable: boolean = true): void {
+    this.autoSubmitIssues = enable;
   }
 }
 

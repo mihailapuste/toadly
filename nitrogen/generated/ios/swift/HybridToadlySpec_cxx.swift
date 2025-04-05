@@ -132,4 +132,15 @@ public class HybridToadlySpec_cxx {
       return bridge.create_Result_void_(__exceptionPtr)
     }
   }
+  
+  @inline(__always)
+  public final func createIssueWithTitle(title: std.string) -> bridge.Result_void_ {
+    do {
+      try self.__implementation.createIssueWithTitle(title: String(title))
+      return bridge.create_Result_void_()
+    } catch (let __error) {
+      let __exceptionPtr = __error.toCpp()
+      return bridge.create_Result_void_(__exceptionPtr)
+    }
+  }
 }

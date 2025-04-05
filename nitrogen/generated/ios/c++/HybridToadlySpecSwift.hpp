@@ -73,6 +73,12 @@ namespace margelo::nitro::toadly {
         std::rethrow_exception(__result.error());
       }
     }
+    inline void createIssueWithTitle(const std::string& title) override {
+      auto __result = _swiftPart.createIssueWithTitle(title);
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+    }
 
   private:
     Toadly::HybridToadlySpec_cxx _swiftPart;

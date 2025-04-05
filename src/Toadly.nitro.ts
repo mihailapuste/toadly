@@ -20,4 +20,10 @@ export interface Toadly
    * Show bug report dialog
    */
   show(): void;
+  
+  /**
+   * Create and submit a GitHub issue with a custom title
+   * @param title The title for the GitHub issue
+   */
+  createIssueWithTitle(title: string): void;
 }

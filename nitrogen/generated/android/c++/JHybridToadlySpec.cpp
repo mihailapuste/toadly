@@ -44,5 +44,9 @@ namespace margelo::nitro::toadly {
     static const auto method = javaClassStatic()->getMethod<void()>("show");
     method(_javaPart);
   }
+  void JHybridToadlySpec::createIssueWithTitle(const std::string& title) {
+    static const auto method = javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* title */)>("createIssueWithTitle");
+    method(_javaPart, jni::make_jstring(title));
+  }
 
 } // namespace margelo::nitro::toadly
